@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { requireAdminAuth } from "@/lib/auth"
 import type { Question } from "@/lib/models"
+import { jsonErrorResponse, jsonSuccess } from "@/lib/api"
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,13 +28,13 @@ export async function GET(request: NextRequest) {
       updatedAt: question.updatedAt.toISOString(),
     }))
 
-    return NextResponse.json({ questions: formattedQuestions })
+    return jsonSuccess({ questions: formattedQuestions })
   } catch (error) {
     console.error("Error fetching questions:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/questions" })
     }
-    return NextResponse.json({ error: "Failed to fetch questions" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to fetch questions", { endpoint: "admin/questions" })
   }
 }
 
@@ -47,15 +48,15 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!question || !options || !Array.isArray(options) || options.length < 2) {
-      return NextResponse.json({ error: "Invalid question data" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid question data")
     }
 
     if (correctAnswer < 0 || correctAnswer >= options.length) {
-      return NextResponse.json({ error: "Invalid correct answer index" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid correct answer index")
     }
 
     if (!category || !difficulty) {
-      return NextResponse.json({ error: "Category and difficulty are required" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Category and difficulty are required")
     }
 
     const db = await getDatabase()
@@ -75,18 +76,18 @@ export async function POST(request: NextRequest) {
 
     const result = await questionsCollection.insertOne(newQuestion)
 
-    return NextResponse.json(
+    return jsonSuccess(
       {
         message: "Question created successfully",
         questionId: result.insertedId.toString(),
       },
-      { status: 201 },
+      201,
     )
   } catch (error) {
     console.error("Error creating question:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/questions" })
     }
-    return NextResponse.json({ error: "Failed to create question" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to create question", { endpoint: "admin/questions" })
   }
 }

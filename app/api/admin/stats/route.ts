@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { requireAdminAuth } from "@/lib/auth"
+import { jsonErrorResponse, jsonSuccess } from "@/lib/api"
 
 export async function GET(request: Request) {
   try {
@@ -24,12 +25,12 @@ export async function GET(request: Request) {
       excellentPerformers,
     }
 
-    return NextResponse.json({ stats })
+    return jsonSuccess({ stats })
   } catch (error) {
     console.error("Error fetching admin stats:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/stats" })
     }
-    return NextResponse.json({ error: "Failed to fetch statistics" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to fetch statistics", { endpoint: "admin/stats" })
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { requireAdminAuth } from "@/lib/auth"
 import type { QuizSubmission } from "@/lib/models"
+import { jsonErrorResponse, jsonSuccess } from "@/lib/api"
 
 export async function GET(request: Request) {
   try {
@@ -25,12 +26,12 @@ export async function GET(request: Request) {
       certificateGenerated: submission.certificateGenerated,
     }))
 
-    return NextResponse.json({ submissions: formattedSubmissions })
+    return jsonSuccess({ submissions: formattedSubmissions })
   } catch (error) {
     console.error("Error fetching submissions:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/submissions" })
     }
-    return NextResponse.json({ error: "Failed to fetch submissions" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to fetch submissions", { endpoint: "admin/submissions" })
   }
 }

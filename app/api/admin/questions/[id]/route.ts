@@ -3,6 +3,7 @@ import { getDatabase } from "@/lib/mongodb"
 import { requireAdminAuth } from "@/lib/auth"
 import type { Question } from "@/lib/models"
 import { ObjectId } from "mongodb"
+import { jsonErrorResponse, jsonSuccess } from "@/lib/api"
 
 export async function GET(
   request: NextRequest,
@@ -17,13 +18,13 @@ export async function GET(
 
     // Validate ObjectId
     if (!ObjectId.isValid(params.id)) {
-      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid question ID")
     }
 
     const question = await questionsCollection.findOne({ _id: new ObjectId(params.id) })
 
     if (!question) {
-      return NextResponse.json({ error: "Question not found" }, { status: 404 })
+      return jsonErrorResponse(null, 404, "Question not found")
     }
 
     // Format the data for the frontend
@@ -39,13 +40,13 @@ export async function GET(
       updatedAt: question.updatedAt.toISOString(),
     }
 
-    return NextResponse.json({ question: formattedQuestion })
+    return jsonSuccess({ question: formattedQuestion })
   } catch (error) {
     console.error("Error fetching question:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/questions/[id]", method: "GET" })
     }
-    return NextResponse.json({ error: "Failed to fetch question" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to fetch question", { endpoint: "admin/questions/[id]", method: "GET" })
   }
 }
 
@@ -62,20 +63,20 @@ export async function PUT(
 
     // Validation
     if (!question || !options || !Array.isArray(options) || options.length < 2) {
-      return NextResponse.json({ error: "Invalid question data" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid question data")
     }
 
     if (correctAnswer < 0 || correctAnswer >= options.length) {
-      return NextResponse.json({ error: "Invalid correct answer index" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid correct answer index")
     }
 
     if (!category || !difficulty) {
-      return NextResponse.json({ error: "Category and difficulty are required" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Category and difficulty are required")
     }
 
     // Validate ObjectId
     if (!ObjectId.isValid(params.id)) {
-      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid question ID")
     }
 
     const db = await getDatabase()
@@ -98,18 +99,18 @@ export async function PUT(
     )
 
     if (result.matchedCount === 0) {
-      return NextResponse.json({ error: "Question not found" }, { status: 404 })
+      return jsonErrorResponse(null, 404, "Question not found")
     }
 
-    return NextResponse.json({
+    return jsonSuccess({
       message: "Question updated successfully",
     })
   } catch (error) {
     console.error("Error updating question:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/questions/[id]", method: "PUT" })
     }
-    return NextResponse.json({ error: "Failed to update question" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to update question", { endpoint: "admin/questions/[id]", method: "PUT" })
   }
 }
 
@@ -123,7 +124,7 @@ export async function DELETE(
 
     // Validate ObjectId
     if (!ObjectId.isValid(params.id)) {
-      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
+      return jsonErrorResponse(null, 400, "Invalid question ID")
     }
 
     const db = await getDatabase()
@@ -132,17 +133,17 @@ export async function DELETE(
     const result = await questionsCollection.deleteOne({ _id: new ObjectId(params.id) })
 
     if (result.deletedCount === 0) {
-      return NextResponse.json({ error: "Question not found" }, { status: 404 })
+      return jsonErrorResponse(null, 404, "Question not found")
     }
 
-    return NextResponse.json({
+    return jsonSuccess({
       message: "Question deleted successfully",
     })
   } catch (error) {
     console.error("Error deleting question:", error)
     if (error instanceof Error && error.message.includes("token")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return jsonErrorResponse(error, 401, "Unauthorized", { endpoint: "admin/questions/[id]", method: "DELETE" })
     }
-    return NextResponse.json({ error: "Failed to delete question" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Failed to delete question", { endpoint: "admin/questions/[id]", method: "DELETE" })
   }
 }
