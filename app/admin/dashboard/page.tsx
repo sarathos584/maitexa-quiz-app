@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, Users, FileText, Award, Plus, TrendingUp, Edit, Trash2, ArrowLeft, Eye } from "lucide-react"
+import { LogOut, Users, FileText, Award, Plus, TrendingUp, Edit, Trash2, ArrowLeft, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -57,6 +57,13 @@ export default function AdminDashboard() {
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false)
   const [showQuestionModal, setShowQuestionModal] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
+  
+  // Pagination states
+  const [submissionsPage, setSubmissionsPage] = useState(1)
+  const [questionsPage, setQuestionsPage] = useState(1)
+  const [submissionsPerPage] = useState(10)
+  const [questionsPerPage] = useState(10)
+  
   const [newQuestionForm, setNewQuestionForm] = useState({
     question: "",
     options: ["", "", "", ""],
@@ -123,6 +130,26 @@ export default function AdminDashboard() {
     }
   }
 
+  // Pagination calculations
+  const submissionsStartIndex = (submissionsPage - 1) * submissionsPerPage
+  const submissionsEndIndex = submissionsStartIndex + submissionsPerPage
+  const paginatedSubmissions = submissions.slice(submissionsStartIndex, submissionsEndIndex)
+  const totalSubmissionsPages = Math.ceil(submissions.length / submissionsPerPage)
+
+  const questionsStartIndex = (questionsPage - 1) * questionsPerPage
+  const questionsEndIndex = questionsStartIndex + questionsPerPage
+  const paginatedQuestions = questions.slice(questionsStartIndex, questionsEndIndex)
+  const totalQuestionsPages = Math.ceil(questions.length / questionsPerPage)
+
+  // Pagination handlers
+  const handleSubmissionsPageChange = (page: number) => {
+    setSubmissionsPage(page)
+  }
+
+  const handleQuestionsPageChange = (page: number) => {
+    setQuestionsPage(page)
+  }
+
   const handleLogout = () => {
     sessionStorage.removeItem("adminToken")
     router.push("/admin")
@@ -151,6 +178,10 @@ export default function AdminDashboard() {
         setQuestions(questions.filter(q => q._id !== questionId))
         // Refresh stats
         fetchDashboardData()
+        // Reset to first page if current page becomes empty
+        if (paginatedQuestions.length === 1 && questionsPage > 1) {
+          setQuestionsPage(questionsPage - 1)
+        }
       }
     } catch (error) {
       console.error("Error deleting question:", error)
@@ -351,6 +382,8 @@ export default function AdminDashboard() {
         // Close modal and refresh data
         setShowAddQuestionModal(false)
         fetchDashboardData()
+        // Reset to first page to show the new question
+        setQuestionsPage(1)
       } else {
         setError(data.error || "Failed to create question")
       }
@@ -366,7 +399,7 @@ export default function AdminDashboard() {
     setNewQuestionForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleEditInputChange = (field: string, value: string | number | string[]) => {
+  const handleEditInputChange = (field: string, value: string | number | string[] | boolean) => {
     setEditQuestionForm((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -431,6 +464,118 @@ export default function AdminDashboard() {
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  // Pagination component
+  const Pagination = ({ 
+    currentPage, 
+    totalPages, 
+    onPageChange, 
+    totalItems, 
+    itemsPerPage, 
+    startIndex, 
+    endIndex 
+  }: {
+    currentPage: number
+    totalPages: number
+    onPageChange: (page: number) => void
+    totalItems: number
+    itemsPerPage: number
+    startIndex: number
+    endIndex: number
+  }) => {
+    if (totalPages <= 1) return null
+
+    const getPageNumbers = () => {
+      const pages = []
+      const maxVisiblePages = 5
+      
+      if (totalPages <= maxVisiblePages) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i)
+        }
+      } else {
+        if (currentPage <= 3) {
+          for (let i = 1; i <= 4; i++) {
+            pages.push(i)
+          }
+          pages.push('...')
+          pages.push(totalPages)
+        } else if (currentPage >= totalPages - 2) {
+          pages.push(1)
+          pages.push('...')
+          for (let i = totalPages - 3; i <= totalPages; i++) {
+            pages.push(i)
+          }
+        } else {
+          pages.push(1)
+          pages.push('...')
+          for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+            pages.push(i)
+          }
+          pages.push('...')
+          pages.push(totalPages)
+        }
+      }
+      
+      return pages
+    }
+
+    return (
+      <div className="flex items-center justify-between px-2 py-4">
+        <div className="text-sm text-muted-foreground">
+          Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          {getPageNumbers().map((page, index) => (
+            <Button
+              key={index}
+              variant={page === currentPage ? "default" : "outline"}
+              size="sm"
+              onClick={() => typeof page === 'number' ? onPageChange(page) : undefined}
+              disabled={page === '...'}
+              className={page === '...' ? "cursor-default" : ""}
+            >
+              {page}
+            </Button>
+          ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -522,10 +667,10 @@ export default function AdminDashboard() {
             {activeTab === "questions" && (
               <Dialog open={showAddQuestionModal} onOpenChange={setShowAddQuestionModal}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Question
-                  </Button>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Question
+              </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -682,7 +827,7 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {submissions.map((submission) => (
+                    {paginatedSubmissions.map((submission) => (
                       <TableRow key={submission._id}>
                         <TableCell className="font-medium">{submission.userName}</TableCell>
                         <TableCell>{submission.userEmail}</TableCell>
@@ -717,6 +862,17 @@ export default function AdminDashboard() {
                     No submissions found. Candidates will appear here after taking the quiz.
                   </div>
                 )}
+                {submissions.length > 0 && (
+                  <Pagination
+                    currentPage={submissionsPage}
+                    totalPages={totalSubmissionsPages}
+                    onPageChange={handleSubmissionsPageChange}
+                    totalItems={submissions.length}
+                    itemsPerPage={submissionsPerPage}
+                    startIndex={submissionsStartIndex}
+                    endIndex={submissionsEndIndex}
+                  />
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -740,7 +896,7 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {questions.map((question) => (
+                    {paginatedQuestions.map((question) => (
                       <TableRow key={question._id}>
                         <TableCell className="max-w-md">
                           <div className="truncate" title={question.question}>
@@ -814,7 +970,18 @@ export default function AdminDashboard() {
                 {questions.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     No questions found. Create your first question to get started.
-                  </div>
+                </div>
+                )}
+                {questions.length > 0 && (
+                  <Pagination
+                    currentPage={questionsPage}
+                    totalPages={totalQuestionsPages}
+                    onPageChange={handleQuestionsPageChange}
+                    totalItems={questions.length}
+                    itemsPerPage={questionsPerPage}
+                    startIndex={questionsStartIndex}
+                    endIndex={questionsEndIndex}
+                  />
                 )}
               </CardContent>
             </Card>
