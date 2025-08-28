@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server"
 import { getCollection } from "@/lib/mongodb"
+import type { Question } from "@/lib/models"
 
 export async function GET() {
   try {
-    const questionsCollection = getCollection("questions")
+    const questionsCollection = await getCollection<Question>("questions")
 
     // Fetch active questions, limit to 10 for the quiz
-    const questions = await questionsCollection.find({ isActive: true }, { limit: 10 })
+    const docs = await questionsCollection
+      .find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .toArray()
 
     // Remove correct answers from the response for security
-    const questionsWithoutAnswers = questions.map(({ correctAnswer, ...question }) => question)
+    const questions = docs.map(({ correctAnswer, ...rest }) => ({ ...rest, _id: rest._id!.toString() })) as any
 
     return NextResponse.json({
-      questions: questionsWithoutAnswers,
+      questions,
       total: questions.length,
     })
   } catch (error) {

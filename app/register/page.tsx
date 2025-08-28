@@ -7,19 +7,19 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 export default function RegisterPage() {
   const router = useRouter()
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    company: "",
+    fullName: "",
     college: "",
-    experience: "",
+    university: "",
+    course: "",
+    graduationYear: "",
     phone: "",
+    email: "",
   })
   const [isLoading, setIsLoading] = useState(false)
 
@@ -38,15 +38,18 @@ export default function RegisterPage() {
 
       if (response.ok) {
         const { userId } = await response.json()
-        // Store user ID in session storage for the quiz
+        // Store user ID and basic info in session storage for the quiz
         sessionStorage.setItem("userId", userId)
+        sessionStorage.setItem("userName", formData.fullName)
+        sessionStorage.setItem("userEmail", formData.email)
         router.push("/quiz")
       } else {
-        throw new Error("Registration failed")
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || "Registration failed")
       }
     } catch (error) {
       console.error("Registration error:", error)
-      alert("Registration failed. Please try again.")
+      alert((error as Error).message || "Registration failed. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -81,18 +84,18 @@ export default function RegisterPage() {
           <Card>
             <CardHeader className="text-center">
               <CardTitle className="text-2xl">Register for Assessment</CardTitle>
-              <CardDescription>Please provide your details to begin the coding assessment</CardDescription>
+              <CardDescription>Please provide your details to begin the assessment</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="fullName">Full Name</Label>
                   <Input
-                    id="name"
+                    id="fullName"
                     type="text"
                     placeholder="Enter your full name"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange("name", e.target.value)}
+                    value={formData.fullName}
+                    onChange={(e) => handleInputChange("fullName", e.target.value)}
                     required
                   />
                 </div>
@@ -110,46 +113,6 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="company">Company</Label>
-                  <Input
-                    id="company"
-                    type="text"
-                    placeholder="Current company (or 'Student' if applicable)"
-                    value={formData.company}
-                    onChange={(e) => handleInputChange("company", e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="college">College/University</Label>
-                  <Input
-                    id="college"
-                    type="text"
-                    placeholder="Your educational institution"
-                    value={formData.college}
-                    onChange={(e) => handleInputChange("college", e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="experience">Experience Level</Label>
-                  <Select onValueChange={(value) => handleInputChange("experience", value)} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your experience level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0-1">0-1 years (Fresher)</SelectItem>
-                      <SelectItem value="1-3">1-3 years (Junior)</SelectItem>
-                      <SelectItem value="3-5">3-5 years (Mid-level)</SelectItem>
-                      <SelectItem value="5-8">5-8 years (Senior)</SelectItem>
-                      <SelectItem value="8+">8+ years (Expert)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
                     id="phone"
@@ -161,8 +124,58 @@ export default function RegisterPage() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="college">College</Label>
+                  <Input
+                    id="college"
+                    type="text"
+                    placeholder="Your college"
+                    value={formData.college}
+                    onChange={(e) => handleInputChange("college", e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="university">University</Label>
+                  <Input
+                    id="university"
+                    type="text"
+                    placeholder="Your university"
+                    value={formData.university}
+                    onChange={(e) => handleInputChange("university", e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="course">Course</Label>
+                  <Input
+                    id="course"
+                    type="text"
+                    placeholder="e.g., B.Tech CSE"
+                    value={formData.course}
+                    onChange={(e) => handleInputChange("course", e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="graduationYear">Graduation Year</Label>
+                  <Input
+                    id="graduationYear"
+                    type="number"
+                    placeholder="e.g., 2026"
+                    value={formData.graduationYear}
+                    onChange={(e) => handleInputChange("graduationYear", e.target.value)}
+                    required
+                    min="1900"
+                    max="2100"
+                  />
+                </div>
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Registering..." : "Start Quiz"}
+                  {isLoading ? "Submitting..." : "Proceed"}
                 </Button>
               </form>
             </CardContent>

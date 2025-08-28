@@ -58,15 +58,20 @@ export default function ResultsPage() {
     if (!result) return
 
     try {
-      // Create a mock PDF download
+      const isExcellent = result.isExcellent
+      const title = isExcellent ? "CERTIFICATE OF EXCELLENCE" : "CERTIFICATE OF PARTICIPATION"
+      const subtitle = isExcellent
+        ? `has successfully completed the Maitexa Coding Assessment with distinction.`
+        : `has successfully participated in the Maitexa Coding Assessment.`
+
       const mockPdfContent = `
-        CERTIFICATE OF EXCELLENCE
+        ${title}
         
         This is to certify that
         ${result.userName}
         
-        has successfully completed the Maitexa Coding Assessment
-        with a score of ${result.score}/${result.totalQuestions} (${Math.round((result.correctAnswers / result.totalQuestions) * 100)}%)
+        ${subtitle}
+        Score: ${result.correctAnswers}/${result.totalQuestions} (${Math.round((result.correctAnswers / result.totalQuestions) * 100)}%)
         
         Date: ${new Date(result.submittedAt).toLocaleDateString()}
         Certificate ID: ${result._id}
@@ -146,13 +151,13 @@ export default function ResultsPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          <Card className={`${isExcellent ? "border-green-200 bg-green-50" : ""}`}>
+          <Card className={`${isExcellent ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"}`}>
             <CardHeader className="text-center">
-              <CardTitle className="text-3xl">{isExcellent ? "Congratulations!" : "Assessment Complete"}</CardTitle>
+              <CardTitle className="text-3xl">Congratulations!</CardTitle>
               <CardDescription className="text-lg">
                 {isExcellent
-                  ? "Excellent performance! You qualify for a certificate."
-                  : "Thank you for taking the assessment."}
+                  ? "Excellent performance! You qualify for a certificate of excellence."
+                  : "Thank you for completing the assessment. Your certificate of participation is ready."}
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center space-y-6">
@@ -172,28 +177,29 @@ export default function ResultsPage() {
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Performance</p>
                   <Badge variant={isExcellent ? "default" : "secondary"} className="text-lg px-4 py-2">
-                    {isExcellent ? "Excellent" : percentage >= 70 ? "Good" : "Needs Improvement"}
+                    {isExcellent ? "Excellent" : percentage >= 70 ? "Good" : "Participation"}
                   </Badge>
                 </div>
               </div>
 
-              {isExcellent && (
-                <div className="space-y-4">
-                  <p className="text-green-700 font-medium">
-                    🎉 Outstanding! You scored 90% or higher and qualify for our excellence certificate.
-                  </p>
-                  <div className="flex gap-3 justify-center">
-                    <Button onClick={previewCertificate} variant="outline" size="lg" className="gap-2 bg-transparent">
-                      <Eye className="h-4 w-4" />
-                      Preview Certificate
-                    </Button>
-                    <Button onClick={downloadCertificate} size="lg" className="gap-2">
-                      <Download className="h-4 w-4" />
-                      Download Certificate
-                    </Button>
-                  </div>
+              {/* Certificate actions - always shown */}
+              <div className="space-y-4">
+                <p className={`${isExcellent ? "text-green-700" : "text-blue-700"} font-medium`}>
+                  {isExcellent
+                    ? "🎉 Outstanding! You scored 90% or higher and qualify for our excellence certificate."
+                    : "🎉 Great job! Here is your certificate of participation."}
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <Button onClick={previewCertificate} variant="outline" size="lg" className="gap-2 bg-transparent">
+                    <Eye className="h-4 w-4" />
+                    Preview Certificate
+                  </Button>
+                  <Button onClick={downloadCertificate} size="lg" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Download Certificate
+                  </Button>
                 </div>
-              )}
+              </div>
 
               <div className="flex gap-4 justify-center">
                 <Link href="/">
@@ -202,9 +208,7 @@ export default function ResultsPage() {
                     Back to Home
                   </Button>
                 </Link>
-                <Button onClick={() => (window.location.href = "mailto:contact@maitexa.com")}>
-                  Contact us for queries
-                </Button>
+                <Button onClick={() => (window.location.href = "mailto:contact@maitexa.com")}>Contact us for queries</Button>
               </div>
             </CardContent>
           </Card>

@@ -156,12 +156,6 @@ export default function NewQuestionPage() {
                   </Alert>
                 )}
 
-                {success && (
-                  <Alert>
-                    <AlertDescription>{success}</AlertDescription>
-                  </Alert>
-                )}
-
                 <div className="space-y-2">
                   <Label htmlFor="question">Question</Label>
                   <Textarea

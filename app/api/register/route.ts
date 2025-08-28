@@ -1,47 +1,60 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { getCollection } from "@/lib/mongodb"
 import type { User } from "@/lib/models"
+import { jsonErrorResponse, jsonSuccess } from "@/lib/api"
+import { ObjectId } from "mongodb"
+
+type DbUser = Omit<User, "_id"> & {
+  _id?: ObjectId
+  university?: string
+  course?: string
+  graduationYear?: number
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, company, college, experience, phone } = body
+    const { fullName, college, university, course, graduationYear, phone, email } = body
 
     // Validate required fields
-    if (!name || !email || !company || !college || !experience || !phone) {
-      return NextResponse.json({ error: "All fields are required" }, { status: 400 })
+    if (!fullName || !college || !university || !course || !graduationYear || !phone || !email) {
+      return jsonErrorResponse(null, 400, "All fields are required")
     }
 
-    const usersCollection = getCollection("users")
+    const usersCollection = await getCollection<DbUser>("users")
 
     // Check if user already exists
     const existingUser = await usersCollection.findOne({ email })
     if (existingUser) {
-      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
+      return jsonErrorResponse(null, 409, "User with this email already exists")
     }
 
     // Create new user
-    const newUser: User = {
-      name,
+    const newUser: DbUser = {
+      name: fullName,
       email,
-      company,
+      company: "",
       college,
-      experience,
+      experience: "",
       phone,
       createdAt: new Date(),
+      // Extended fields for education
+      university,
+      course,
+      graduationYear: Number(graduationYear),
     }
 
     const result = await usersCollection.insertOne(newUser)
 
-    return NextResponse.json(
+    return jsonSuccess(
       {
         message: "User registered successfully",
         userId: result.insertedId.toString(),
       },
-      { status: 201 },
+      201,
     )
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return jsonErrorResponse(error, 500, "Internal server error", { endpoint: "register" })
   }
 }

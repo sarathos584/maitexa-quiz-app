@@ -1,4 +1,4 @@
-import { MongoClient, Db } from 'mongodb'
+import { MongoClient, Db, Collection, type Document } from 'mongodb'
 
 const MONGODB_URI = process.env.MONGO_URI
 const DATABASE_NAME = "maitexa_quiz"
@@ -28,9 +28,9 @@ export async function connectToDatabase() {
   }
 }
 
-export async function getCollection(name: string) {
+export async function getCollection<T extends Document = Document>(name: string): Promise<Collection<T>> {
   const { db } = await connectToDatabase()
-  return db.collection(name)
+  return db.collection<T>(name)
 }
 
 export async function closeConnection() {

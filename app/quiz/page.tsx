@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
@@ -18,6 +18,8 @@ interface Question {
   difficulty: string
 }
 
+const QUIZ_DURATION_MS = 10 * 60 * 1000 // 10 minutes
+
 export default function QuizPage() {
   const router = useRouter()
   const [questions, setQuestions] = useState<Question[]>([])
@@ -27,6 +29,22 @@ export default function QuizPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [hasStarted, setHasStarted] = useState(false)
+  const [deadline, setDeadline] = useState<number | null>(null)
+  const [now, setNow] = useState<number>(Date.now())
+
+  // Derived countdown time left
+  const timeLeftMs = useMemo(() => {
+    if (!deadline) return 0
+    return Math.max(0, deadline - now)
+  }, [deadline, now])
+
+  const timeLeftDisplay = useMemo(() => {
+    const totalSeconds = Math.floor(timeLeftMs / 1000)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+  }, [timeLeftMs])
 
   useEffect(() => {
     // Check if user is registered
@@ -40,6 +58,21 @@ export default function QuizPage() {
     // Fetch questions
     fetchQuestions()
   }, [router])
+
+  // Timer tick
+  useEffect(() => {
+    if (!hasStarted || !deadline) return
+
+    const tick = () => setNow(Date.now())
+    const interval = setInterval(tick, 1000)
+
+    // Auto-submit at deadline
+    if (timeLeftMs === 0 && questions.length > 0 && !isSubmitting) {
+      submitQuiz(true)
+    }
+
+    return () => clearInterval(interval)
+  }, [hasStarted, deadline, timeLeftMs, questions.length, isSubmitting])
 
   const fetchQuestions = async () => {
     try {
@@ -58,8 +91,24 @@ export default function QuizPage() {
     }
   }
 
+  const startQuiz = () => {
+    setHasStarted(true)
+    setDeadline(Date.now() + QUIZ_DURATION_MS)
+  }
+
   const handleAnswerSelect = (answerIndex: number) => {
     setSelectedAnswer(answerIndex)
+  }
+
+  const handleSkip = () => {
+    // move forward without selecting an answer
+    const nextIndex = currentQuestionIndex + 1
+    if (nextIndex < questions.length) {
+      setCurrentQuestionIndex(nextIndex)
+      setSelectedAnswer(null)
+    } else {
+      submitQuiz(false)
+    }
   }
 
   const handleNext = () => {
@@ -75,12 +124,12 @@ export default function QuizPage() {
         setSelectedAnswer(null)
       } else {
         // Quiz completed, submit answers
-        submitQuiz()
+        submitQuiz(false)
       }
     }
   }
 
-  const submitQuiz = async () => {
+  const submitQuiz = async (auto: boolean) => {
     if (!userId) return
 
     setIsSubmitting(true)
@@ -88,7 +137,7 @@ export default function QuizPage() {
     try {
       const finalAnswers = {
         ...answers,
-        [questions[currentQuestionIndex]._id]: selectedAnswer,
+        ...(selectedAnswer !== null && { [questions[currentQuestionIndex]?._id]: selectedAnswer }),
       }
 
       // Calculate mock score
@@ -123,6 +172,8 @@ export default function QuizPage() {
         answers: mockAnswers,
         submittedAt: new Date().toISOString(),
         isExcellent,
+        autoSubmitted: auto,
+        timeTakenMs: deadline ? QUIZ_DURATION_MS - Math.max(0, deadline - Date.now()) : undefined,
       }
 
       // Store mock results in sessionStorage for the results page
@@ -136,6 +187,12 @@ export default function QuizPage() {
       alert("Something went wrong. Please try again.")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const exitWithoutSubmitting = () => {
+    if (confirm("Are you sure you want to exit without submitting? Your progress will be lost.")) {
+      router.push("/")
     }
   }
 
@@ -169,6 +226,31 @@ export default function QuizPage() {
     )
   }
 
+  // Pre-quiz instructions screen
+  if (!hasStarted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-2xl">
+          <CardHeader>
+            <CardTitle>Assessment Instructions</CardTitle>
+            <CardDescription>Please read carefully before you start</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ul className="list-disc pl-6 space-y-2 text-sm text-muted-foreground">
+              <li>You have 10 minutes to complete the assessment.</li>
+              <li>You can skip questions and come back if time permits.</li>
+              <li>Your quiz auto-submits when time runs out.</li>
+              <li>Click "Start Assessment" when you are ready.</li>
+            </ul>
+            <div className="flex justify-end">
+              <Button onClick={startQuiz}>Start Assessment</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const currentQuestion = questions[currentQuestionIndex]
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
 
@@ -183,8 +265,9 @@ export default function QuizPage() {
               </div>
               <h1 className="text-2xl font-bold text-card-foreground">Maitexa Quiz</h1>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Question {currentQuestionIndex + 1} of {questions.length}
+            <div className="text-sm text-muted-foreground flex items-center gap-3">
+              <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
+              <span className="px-2 py-1 rounded bg-muted font-mono">{timeLeftDisplay}</span>
             </div>
           </div>
           <div className="mt-4">
@@ -227,17 +310,22 @@ export default function QuizPage() {
                 ))}
               </RadioGroup>
 
-              <div className="flex justify-between items-center pt-4">
+              <div className="flex flex-wrap gap-2 justify-between items-center pt-4">
                 <div className="text-sm text-muted-foreground">
-                  {selectedAnswer !== null ? "Answer selected" : "Please select an answer"}
+                  {selectedAnswer !== null ? "Answer selected" : "Please select an answer or skip"}
                 </div>
-                <Button onClick={handleNext} disabled={selectedAnswer === null || isSubmitting} size="lg">
-                  {isSubmitting
-                    ? "Submitting..."
-                    : currentQuestionIndex === questions.length - 1
-                      ? "Submit Quiz"
-                      : "Next Question"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleSkip} disabled={isSubmitting}>Skip</Button>
+                  <Button variant="outline" onClick={() => submitQuiz(false)} disabled={isSubmitting}>Submit Now</Button>
+                  <Button variant="outline" onClick={exitWithoutSubmitting} disabled={isSubmitting}>Exit</Button>
+                  <Button onClick={handleNext} disabled={selectedAnswer === null || isSubmitting}>
+                    {isSubmitting
+                      ? "Submitting..."
+                      : currentQuestionIndex === questions.length - 1
+                        ? "Submit Quiz"
+                        : "Next Question"}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
