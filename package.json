@@ -10,7 +10,8 @@
     "seed:admin": "node scripts/create-admin.js",
     "seed:data": "node scripts/seed-questions.js",
     "seed:submissions": "node scripts/seed-submissions.js",
-    "seed": "npm run seed:admin && npm run seed:data && npm run seed:submissions"
+    "seed": "npm run seed:admin && npm run seed:data && npm run seed:submissions",
+    "backfill:certificates": "node scripts/backfill-certificate-ids.js"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "latest",

@@ -26,28 +26,56 @@ export default function CertificatePreviewById() {
   const certificateId = searchParams.get("certificateId") || ""
   const [data, setData] = useState<CertificateViewData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    const fromSession = sessionStorage.getItem("mockResults")
-    if (fromSession) {
-      try {
-        const r = JSON.parse(fromSession)
-        const d: CertificateViewData = {
-          userName: r.userName,
-          userEmail: r.userEmail,
-          company: "",
-          college: r.college || "",
-          totalQuestions: r.totalQuestions,
-          percentage: Math.round((r.correctAnswers / r.totalQuestions) * 100),
-          completedAt: r.submittedAt,
-          certificateId: r.certificateId || certificateId || "",
-          excellence: r.isExcellent,
-        }
-        setData(d)
-      } catch {}
+    const load = async () => {
+      const id = certificateId
+      if (id) {
+        try {
+          const res = await fetch(`/api/certificate/preview?certificateId=${encodeURIComponent(id)}`)
+          if (res.ok) {
+            const json = await res.json()
+            setData(json.certificate)
+            setIsLoading(false)
+            return
+          }
+        } catch {}
+      }
+      // Fallback to session
+      const fromSession = sessionStorage.getItem("mockResults")
+      if (fromSession) {
+        try {
+          const r = JSON.parse(fromSession)
+          const d: CertificateViewData = {
+            userName: r.userName,
+            userEmail: r.userEmail,
+            company: "",
+            college: r.college || "",
+            totalQuestions: r.totalQuestions,
+            percentage: Math.round((r.correctAnswers / r.totalQuestions) * 100),
+            completedAt: r.submittedAt,
+            certificateId: r.certificateId || id || "",
+            excellence: r.isExcellent,
+          }
+          setData(d)
+        } catch {}
+      }
+      setIsLoading(false)
     }
-    setIsLoading(false)
+    load()
   }, [certificateId])
+
+  const copyUrl = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : ""
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (e) {
+      console.error("Failed to copy URL", e)
+    }
+  }
 
   const download = () => {
     if (!data) return
@@ -197,7 +225,10 @@ export default function CertificatePreviewById() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Certificate Preview</h1>
-            <Button variant="outline" onClick={() => router.push("/")}> <Home className="h-4 w-4 mr-2"/> Home</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={copyUrl}>{copied ? "Copied!" : "Copy URL"}</Button>
+              <Button variant="outline" onClick={() => router.push("/")}> <Home className="h-4 w-4 mr-2"/> Home</Button>
+            </div>
           </div>
         </div>
       </header>
