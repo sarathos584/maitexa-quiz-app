@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { CheckCircle, XCircle, Download, Home, Eye } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { jsPDF } from "jspdf"
 
 interface QuizResult {
   _id: string
@@ -25,6 +26,7 @@ interface QuizResult {
   userName: string
   userEmail: string
   submittedAt: string
+  certificateId?: string
 }
 
 export default function ResultsPage() {
@@ -58,47 +60,129 @@ export default function ResultsPage() {
     if (!result) return
 
     try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 10
+      const inner = 5
+
+      // Background & borders
+      doc.setFillColor(248, 250, 252)
+      doc.rect(0, 0, pageWidth, pageHeight, "F")
+      doc.setDrawColor(22, 78, 99)
+      doc.setLineWidth(2)
+      doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2)
+      doc.setDrawColor(139, 92, 246)
+      doc.setLineWidth(0.5)
+      doc.rect(margin + inner, margin + inner, pageWidth - (margin + inner) * 2, pageHeight - (margin + inner) * 2)
+
+      // Header bar
+      doc.setFillColor(22, 78, 99)
+      doc.rect(margin + inner + 5, margin + inner + 5, pageWidth - (margin + inner + 5) * 2, 25, "F")
+
+      // Logo & company
+      doc.setFillColor(255, 255, 255)
+      doc.circle(margin + inner + 20, margin + inner + 17.5, 8, "F")
+      doc.setTextColor(22, 78, 99)
+      doc.setFontSize(16)
+      doc.setFont("times", "bold")
+      doc.text("M", margin + inner + 17, margin + inner + 21)
+
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(24)
+      doc.setFont("helvetica", "bold")
+      doc.text("MAITEXA", margin + inner + 35, margin + inner + 15)
+      doc.setFontSize(12)
+      doc.setFont("courier", "normal")
+      doc.text("Professional Coding Assessments", margin + inner + 35, margin + inner + 23)
+
+      // Title
       const isExcellent = result.isExcellent
+      doc.setTextColor(22, 78, 99)
+      doc.setFontSize(30)
+      doc.setFont("times", "bold")
       const title = isExcellent ? "CERTIFICATE OF EXCELLENCE" : "CERTIFICATE OF PARTICIPATION"
-      const subtitle = isExcellent
-        ? `has successfully completed the Maitexa Coding Assessment with distinction.`
-        : `has successfully participated in the Maitexa Coding Assessment.`
+      const titleWidth = doc.getTextWidth(title)
+      doc.text(title, (pageWidth - titleWidth) / 2, 70)
 
-      const mockPdfContent = `
-        ${title}
-        
-        This is to certify that
-        ${result.userName}
-        
-        ${subtitle}
-        Score: ${result.correctAnswers}/${result.totalQuestions} (${Math.round((result.correctAnswers / result.totalQuestions) * 100)}%)
-        
-        Date: ${new Date(result.submittedAt).toLocaleDateString()}
-        Certificate ID: ${result._id}
-        
-        Maitexa Technologies
-      `
+      // Subtitle & name
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(71, 85, 105)
+      const subtitle = "This certifies that"
+      const subtitleWidth = doc.getTextWidth(subtitle)
+      doc.text(subtitle, (pageWidth - subtitleWidth) / 2, 85)
 
-      const blob = new Blob([mockPdfContent], { type: "text/plain" })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `maitexa-certificate-${result.userName.replace(/\s+/g, "-")}.txt`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      doc.setFontSize(28)
+      doc.setFont("courier", "bold")
+      doc.setTextColor(139, 92, 246)
+      const nameWidth = doc.getTextWidth(result.userName)
+      doc.text(result.userName, (pageWidth - nameWidth) / 2, 105)
+
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(71, 85, 105)
+      const line1 = isExcellent
+        ? "has successfully completed the Maitexa Coding Assessment"
+        : "has successfully participated in the Maitexa Coding Assessment"
+      const wrappedLine1 = doc.splitTextToSize(line1, pageWidth - 40)
+      doc.text(wrappedLine1, 20, 120)
+
+      // Bottom details (responsive)
+      doc.setFontSize(12)
+      doc.setTextColor(22, 78, 99)
+      doc.setFont("helvetica", "bold")
+      const colGap = 15
+      const colWidth = (pageWidth - 40 - colGap) / 2
+      const leftX = 20
+      const rightX = leftX + colWidth + colGap
+      let y = 150
+
+      // Institution
+      doc.text("Institution:", leftX, y)
+      doc.setFont("helvetica", "normal")
+      const college = (sessionStorage.getItem("college") || "-")
+      const wrappedCollege = doc.splitTextToSize(college, colWidth)
+      doc.text(wrappedCollege, leftX, y + 8)
+
+      // Date & Certificate ID
+      doc.setFont("helvetica", "bold")
+      doc.text("Date of Completion:", rightX, y)
+      doc.setFont("helvetica", "normal")
+      const dateStr = new Date(result.submittedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+      const wrappedDate = doc.splitTextToSize(dateStr, colWidth)
+      doc.text(wrappedDate, rightX, y + 8)
+
+      y = y + Math.max(wrappedCollege.length, wrappedDate.length) * 6 + 10
+
+      doc.setFont("helvetica", "bold")
+      doc.text("Certificate ID:", rightX, y)
+      doc.setFont("courier", "bold")
+      const certId = (result as any).certificateId || "-"
+      const wrappedCert = doc.splitTextToSize(certId, colWidth)
+      doc.text(wrappedCert, rightX, y + 8)
+
+      // Badge
+      doc.setFillColor(139, 92, 246)
+      doc.circle(pageWidth - 40, 60, 15, "F")
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      doc.text(isExcellent ? "EXCELLENCE" : "PARTICIPATION", pageWidth - 54, 58)
+      doc.text(isExcellent ? "90%+" : "THANK YOU", pageWidth - 47, 65)
+
+      doc.save(`maitexa-certificate-${result.userName.replace(/\s+/g, "-")}.pdf`)
     } catch (error) {
-      console.error("Error downloading certificate:", error)
-      alert("Certificate download feature is in demo mode.")
+      console.error("Error generating certificate PDF:", error)
+      alert("Certificate download failed. Please try again.")
     }
   }
 
   const previewCertificate = () => {
     if (!result) return
 
-    const certificateUrl = `/certificate/${result._id}`
-    window.open(certificateUrl, "_blank")
+    const url = `/certificate/preview?certificateId=${encodeURIComponent((result as any).certificateId || "")}`
+    window.open(url, "_blank")
   }
 
   if (isLoading) {
@@ -182,7 +266,6 @@ export default function ResultsPage() {
                 </div>
               </div>
 
-              {/* Certificate actions - always shown */}
               <div className="space-y-4">
                 <p className={`${isExcellent ? "text-green-700" : "text-blue-700"} font-medium`}>
                   {isExcellent

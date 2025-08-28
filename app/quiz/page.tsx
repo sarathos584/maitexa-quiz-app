@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { generateCertificateId } from "@/lib/certificate"
 
 interface Question {
   _id: string
@@ -160,6 +161,8 @@ export default function QuizPage() {
       const score = Math.round((correctCount / questions.length) * 100)
       const isExcellent = score >= 90
 
+      const certId = generateCertificateId(new Date())
+
       // Create mock submission data
       const mockSubmission = {
         _id: `mock_${Date.now()}`,
@@ -174,6 +177,7 @@ export default function QuizPage() {
         isExcellent,
         autoSubmitted: auto,
         timeTakenMs: deadline ? QUIZ_DURATION_MS - Math.max(0, deadline - Date.now()) : undefined,
+        certificateId: certId,
       }
 
       // Store mock results in sessionStorage for the results page
