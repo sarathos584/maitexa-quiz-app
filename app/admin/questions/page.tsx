@@ -5,22 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Archive, Search, ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Plus, Edit, Trash2, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 interface Question {
   _id: string
@@ -34,15 +23,11 @@ interface Question {
   updatedAt: string
 }
 
-export default function QuestionsPage() {
+export default function QuestionsManagement() {
   const router = useRouter()
   const [questions, setQuestions] = useState<Question[]>([])
-  const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [difficultyFilter, setDifficultyFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null)
 
   useEffect(() => {
     // Check admin authentication
@@ -55,37 +40,25 @@ export default function QuestionsPage() {
     fetchQuestions()
   }, [router])
 
-  useEffect(() => {
-    // Filter questions based on search and filters
-    let filtered = questions
-
-    if (searchTerm) {
-      filtered = filtered.filter((q) => q.question.toLowerCase().includes(searchTerm.toLowerCase()))
-    }
-
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter((q) => q.category === categoryFilter)
-    }
-
-    if (difficultyFilter !== "all") {
-      filtered = filtered.filter((q) => q.difficulty === difficultyFilter)
-    }
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((q) => (statusFilter === "active" ? q.isActive : !q.isActive))
-    }
-
-    setFilteredQuestions(filtered)
-  }, [questions, searchTerm, categoryFilter, difficultyFilter, statusFilter])
-
   const fetchQuestions = async () => {
     try {
-      const response = await fetch("/api/admin/questions")
+      const adminToken = sessionStorage.getItem("adminToken")
+      const headers = {
+        "Authorization": `Bearer ${adminToken}`,
+        "Content-Type": "application/json",
+      }
+
+      const response = await fetch("/api/admin/questions", { headers })
+
+      if (response.status === 401) {
+        sessionStorage.removeItem("adminToken")
+        router.push("/admin")
+        return
+      }
+
       if (response.ok) {
         const data = await response.json()
         setQuestions(data.questions)
-      } else {
-        throw new Error("Failed to fetch questions")
       }
     } catch (error) {
       console.error("Error fetching questions:", error)
@@ -96,39 +69,60 @@ export default function QuestionsPage() {
 
   const handleDeleteQuestion = async (questionId: string) => {
     try {
+      const adminToken = sessionStorage.getItem("adminToken")
+      const headers = {
+        "Authorization": `Bearer ${adminToken}`,
+        "Content-Type": "application/json",
+      }
+
       const response = await fetch(`/api/admin/questions/${questionId}`, {
         method: "DELETE",
+        headers,
       })
 
+      if (response.status === 401) {
+        sessionStorage.removeItem("adminToken")
+        router.push("/admin")
+        return
+      }
+
       if (response.ok) {
-        setQuestions((prev) => prev.filter((q) => q._id !== questionId))
-      } else {
-        throw new Error("Failed to delete question")
+        // Remove the question from the local state
+        setQuestions(questions.filter(q => q._id !== questionId))
       }
     } catch (error) {
       console.error("Error deleting question:", error)
-      alert("Failed to delete question. Please try again.")
     }
   }
 
-  const handleToggleStatus = async (questionId: string, currentStatus: boolean) => {
+  const handleToggleActive = async (questionId: string, currentStatus: boolean) => {
     try {
+      const adminToken = sessionStorage.getItem("adminToken")
+      const headers = {
+        "Authorization": `Bearer ${adminToken}`,
+        "Content-Type": "application/json",
+      }
+
       const response = await fetch(`/api/admin/questions/${questionId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        method: "PUT",
+        headers,
         body: JSON.stringify({ isActive: !currentStatus }),
       })
 
+      if (response.status === 401) {
+        sessionStorage.removeItem("adminToken")
+        router.push("/admin")
+        return
+      }
+
       if (response.ok) {
-        setQuestions((prev) => prev.map((q) => (q._id === questionId ? { ...q, isActive: !currentStatus } : q)))
-      } else {
-        throw new Error("Failed to update question status")
+        // Update the question status in local state
+        setQuestions(questions.map(q => 
+          q._id === questionId ? { ...q, isActive: !currentStatus } : q
+        ))
       }
     } catch (error) {
-      console.error("Error updating question status:", error)
-      alert("Failed to update question status. Please try again.")
+      console.error("Error updating question:", error)
     }
   }
 
@@ -140,7 +134,18 @@ export default function QuestionsPage() {
     })
   }
 
-  const categories = [...new Set(questions.map((q) => q.category))]
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case "easy":
+        return "bg-green-100 text-green-800"
+      case "medium":
+        return "bg-yellow-100 text-yellow-800"
+      case "hard":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
 
   if (isLoading) {
     return (
@@ -164,7 +169,7 @@ export default function QuestionsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/admin/dashboard">
-                <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+                <Button variant="outline" size="sm" className="gap-2">
                   <ArrowLeft className="h-4 w-4" />
                   Back to Dashboard
                 </Button>
@@ -189,166 +194,155 @@ export default function QuestionsPage() {
       <main className="container mx-auto px-4 py-8">
         <Card>
           <CardHeader>
-            <CardTitle>Quiz Questions</CardTitle>
-            <CardDescription>Manage your quiz questions, categories, and difficulty levels</CardDescription>
+            <CardTitle>All Questions</CardTitle>
+            <CardDescription>Manage quiz questions, categories, and difficulty levels</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search questions..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="All Difficulties" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Difficulties</SelectItem>
-                  <SelectItem value="easy">Easy</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="hard">Hard</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Question</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Difficulty</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredQuestions.map((question) => (
-                    <TableRow key={question._id}>
-                      <TableCell className="max-w-md">
-                        <p className="font-medium text-balance line-clamp-2">{question.question}</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Correct: {question.options[question.correctAnswer]}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{question.category}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            question.difficulty === "easy"
-                              ? "secondary"
-                              : question.difficulty === "medium"
-                                ? "default"
-                                : "destructive"
-                          }
-                        >
-                          {question.difficulty}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={question.isActive ? "default" : "outline"}>
-                          {question.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{formatDate(question.createdAt)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link href={`/admin/questions/${question._id}/edit`}>
-                            <Button variant="outline" size="sm" className="gap-1 bg-transparent">
-                              <Edit className="h-3 w-3" />
-                              Edit
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Question</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Difficulty</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {questions.map((question) => (
+                  <TableRow key={question._id}>
+                    <TableCell className="max-w-md">
+                      <div className="truncate" title={question.question}>
+                        {question.question}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{question.category}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getDifficultyColor(question.difficulty)}>
+                        {question.difficulty}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant={question.isActive ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleToggleActive(question._id, question.isActive)}
+                      >
+                        {question.isActive ? "Active" : "Inactive"}
+                      </Button>
+                    </TableCell>
+                    <TableCell>{formatDate(question.createdAt)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedQuestion(question)}
+                            >
+                              <Edit className="h-4 w-4" />
                             </Button>
-                          </Link>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleStatus(question._id, question.isActive)}
-                            className="gap-1 bg-transparent"
-                          >
-                            <Archive className="h-3 w-3" />
-                            {question.isActive ? "Archive" : "Activate"}
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1 text-destructive hover:text-destructive bg-transparent"
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Question Details</DialogTitle>
+                              <DialogDescription>
+                                View and edit question information
+                              </DialogDescription>
+                            </DialogHeader>
+                            {selectedQuestion && (
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="text-sm font-medium">Question</label>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {selectedQuestion.question}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Options</label>
+                                  <div className="space-y-2 mt-1">
+                                    {selectedQuestion.options.map((option, index) => (
+                                      <div
+                                        key={index}
+                                        className={`p-2 rounded border ${
+                                          index === selectedQuestion.correctAnswer
+                                            ? "border-green-500 bg-green-50"
+                                            : "border-gray-200"
+                                        }`}
+                                      >
+                                        <span className="text-sm font-medium mr-2">
+                                          {String.fromCharCode(65 + index)}.
+                                        </span>
+                                        {option}
+                                        {index === selectedQuestion.correctAnswer && (
+                                          <Badge className="ml-2 bg-green-500">Correct</Badge>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-sm font-medium">Category</label>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {selectedQuestion.category}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">Difficulty</label>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {selectedQuestion.difficulty}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex justify-end space-x-2">
+                                  <Link href={`/admin/questions/${selectedQuestion._id}/edit`}>
+                                    <Button>Edit Question</Button>
+                                  </Link>
+                                </div>
+                              </div>
+                            )}
+                          </DialogContent>
+                        </Dialog>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Question</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this question? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteQuestion(question._id)}
+                                className="bg-red-500 hover:bg-red-600"
                               >
-                                <Trash2 className="h-3 w-3" />
                                 Delete
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Question</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this question? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteQuestion(question._id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {filteredQuestions.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  {questions.length === 0
-                    ? "No questions found. Add your first question!"
-                    : "No questions match your filters."}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <p>
-                Showing {filteredQuestions.length} of {questions.length} questions
-              </p>
-              <p>{questions.filter((q) => q.isActive).length} active questions</p>
-            </div>
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {questions.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No questions found. Create your first question to get started.
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

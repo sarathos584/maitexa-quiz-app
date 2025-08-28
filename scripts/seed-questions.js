@@ -1,6 +1,9 @@
-const MONGODB_DATA_API_URL = process.env.MONGODB_DATA_API_URL
-const MONGODB_API_KEY = process.env.MONGODB_API_KEY
-const DATABASE_NAME = "maitexa_quiz"
+const path = require('path');
+require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local') });
+const { MongoClient } = require('mongodb');
+
+const MONGODB_URI = process.env.MONGO_URI;
+const DATABASE_NAME = "maitexa_quiz";
 
 const sampleQuestions = [
   {
@@ -113,58 +116,38 @@ const sampleQuestions = [
     createdAt: new Date(),
     updatedAt: new Date(),
   },
-]
+];
 
 async function seedQuestions() {
-  if (!MONGODB_DATA_API_URL || !MONGODB_API_KEY) {
-    console.log("MongoDB Data API not configured. Using mock data in development.")
-    console.log("Questions will be available when you configure the MongoDB Atlas Data API.")
-    return
+  if (!MONGODB_URI) {
+    console.error('MONGO_URI environment variable is not defined');
+    console.error('Please check your .env.local file');
+    process.exit(1);
   }
 
+  const client = new MongoClient(MONGODB_URI);
+
   try {
-    console.log("Seeding questions via MongoDB Atlas Data API...")
+    await client.connect();
+    console.log('Connected to MongoDB');
+
+    const db = client.db(DATABASE_NAME);
+    const questionsCollection = db.collection('questions');
 
     // Clear existing questions
-    await fetch(`${MONGODB_DATA_API_URL}/action/deleteMany`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": MONGODB_API_KEY,
-      },
-      body: JSON.stringify({
-        collection: "questions",
-        database: DATABASE_NAME,
-        filter: {},
-      }),
-    })
-
-    console.log("Cleared existing questions")
+    await questionsCollection.deleteMany({});
+    console.log('Cleared existing questions');
 
     // Insert sample questions
-    const response = await fetch(`${MONGODB_DATA_API_URL}/action/insertMany`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": MONGODB_API_KEY,
-      },
-      body: JSON.stringify({
-        collection: "questions",
-        database: DATABASE_NAME,
-        documents: sampleQuestions,
-      }),
-    })
+    const result = await questionsCollection.insertMany(sampleQuestions);
+    console.log(`Inserted ${result.insertedIds ? Object.keys(result.insertedIds).length : sampleQuestions.length} questions`);
+    console.log('Questions seeded successfully!');
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`)
-    }
-
-    const result = await response.json()
-    console.log(`Inserted ${result.insertedIds?.length || sampleQuestions.length} questions`)
-    console.log("Questions seeded successfully!")
   } catch (error) {
-    console.error("Error seeding questions:", error)
+    console.error('Error seeding questions:', error);
+  } finally {
+    await client.close();
   }
 }
 
-seedQuestions()
+seedQuestions();

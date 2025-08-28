@@ -46,10 +46,22 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      const adminToken = sessionStorage.getItem("adminToken")
+      const headers = {
+        "Authorization": `Bearer ${adminToken}`,
+        "Content-Type": "application/json",
+      }
+
       const [statsResponse, submissionsResponse] = await Promise.all([
-        fetch("/api/admin/stats"),
-        fetch("/api/admin/submissions"),
+        fetch("/api/admin/stats", { headers }),
+        fetch("/api/admin/submissions", { headers }),
       ])
+
+      if (statsResponse.status === 401 || submissionsResponse.status === 401) {
+        sessionStorage.removeItem("adminToken")
+        router.push("/admin")
+        return
+      }
 
       if (statsResponse.ok && submissionsResponse.ok) {
         const statsData = await statsResponse.json()

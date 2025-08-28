@@ -1,4 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
+import { getCollection } from "@/lib/mongodb"
+import type { Admin } from "@/lib/models"
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,26 +14,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    // Demo credentials for prototype
-    const validCredentials = {
-      email: "admin@maitexa.com",
-      password: "admin123",
-    }
-
-    if (email !== validCredentials.email || password !== validCredentials.password) {
+    const adminCollection = await getCollection("admins")
+    
+    // Find admin by email
+    const admin = await adminCollection.findOne({ email: email.toLowerCase() })
+    
+    if (!admin) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    // Generate mock token for session
-    const mockToken = `mock-admin-token-${Date.now()}`
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.password)
+    
+    if (!isPasswordValid) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        adminId: admin._id.toString(),
+        email: admin.email,
+        name: admin.name 
+      },
+      JWT_SECRET,
+      { expiresIn: "24h" }
+    )
 
     return NextResponse.json({
       message: "Login successful",
-      token: mockToken,
+      token,
       admin: {
-        id: "admin-1",
-        email: "admin@maitexa.com",
-        name: "Admin User",
+        id: admin._id.toString(),
+        email: admin.email,
+        name: admin.name,
       },
     })
   } catch (error) {

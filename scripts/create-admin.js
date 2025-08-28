@@ -1,4 +1,6 @@
 const bcrypt = require('bcryptjs');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local') });
 const { MongoClient } = require('mongodb');
 
 const MONGODB_URI = process.env.MONGO_URI;
@@ -7,6 +9,7 @@ const DATABASE_NAME = "maitexa_quiz";
 async function createAdmin() {
   if (!MONGODB_URI) {
     console.error('MONGO_URI environment variable is not defined');
+    console.error('Please check your .env.local file');
     process.exit(1);
   }
 

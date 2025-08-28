@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { requireAdminAuth } from "@/lib/auth"
 import type { QuizSubmission } from "@/lib/models"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Verify admin authentication
+    requireAdminAuth(request as any)
+
     const db = await getDatabase()
     const submissionsCollection = db.collection<QuizSubmission>("quiz_submissions")
 
@@ -24,6 +28,9 @@ export async function GET() {
     return NextResponse.json({ submissions: formattedSubmissions })
   } catch (error) {
     console.error("Error fetching submissions:", error)
+    if (error instanceof Error && error.message.includes("token")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Failed to fetch submissions" }, { status: 500 })
   }
 }

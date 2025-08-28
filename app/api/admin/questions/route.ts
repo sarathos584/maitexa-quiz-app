@@ -1,9 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { requireAdminAuth } from "@/lib/auth"
 import type { Question } from "@/lib/models"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    requireAdminAuth(request)
+
     const db = await getDatabase()
     const questionsCollection = db.collection<Question>("questions")
 
@@ -26,12 +30,18 @@ export async function GET() {
     return NextResponse.json({ questions: formattedQuestions })
   } catch (error) {
     console.error("Error fetching questions:", error)
+    if (error instanceof Error && error.message.includes("token")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Failed to fetch questions" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    requireAdminAuth(request)
+
     const body = await request.json()
     const { question, options, correctAnswer, category, difficulty } = body
 
@@ -74,6 +84,9 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error("Error creating question:", error)
+    if (error instanceof Error && error.message.includes("token")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Failed to create question" }, { status: 500 })
   }
 }

@@ -1,25 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { requireAdminAuth } from "@/lib/auth"
 import type { Question } from "@/lib/models"
 import { ObjectId } from "mongodb"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const { id } = params
-
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
-    }
+    // Verify admin authentication
+    requireAdminAuth(request)
 
     const db = await getDatabase()
     const questionsCollection = db.collection<Question>("questions")
 
-    const question = await questionsCollection.findOne({ _id: new ObjectId(id) })
+    // Validate ObjectId
+    if (!ObjectId.isValid(params.id)) {
+      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
+    }
+
+    const question = await questionsCollection.findOne({ _id: new ObjectId(params.id) })
 
     if (!question) {
       return NextResponse.json({ error: "Question not found" }, { status: 404 })
     }
 
+    // Format the data for the frontend
     const formattedQuestion = {
       _id: question._id!.toString(),
       question: question.question,
@@ -35,19 +42,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ question: formattedQuestion })
   } catch (error) {
     console.error("Error fetching question:", error)
+    if (error instanceof Error && error.message.includes("token")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Failed to fetch question" }, { status: 500 })
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const { id } = params
+    // Verify admin authentication
+    requireAdminAuth(request)
+
     const body = await request.json()
     const { question, options, correctAnswer, category, difficulty, isActive } = body
-
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
-    }
 
     // Validation
     if (!question || !options || !Array.isArray(options) || options.length < 2) {
@@ -62,9 +73,15 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Category and difficulty are required" }, { status: 400 })
     }
 
+    // Validate ObjectId
+    if (!ObjectId.isValid(params.id)) {
+      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
+    }
+
     const db = await getDatabase()
     const questionsCollection = db.collection<Question>("questions")
 
+    // Update question
     const updateData = {
       question: question.trim(),
       options: options.map((opt: string) => opt.trim()),
@@ -75,69 +92,57 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       updatedAt: new Date(),
     }
 
-    const result = await questionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: updateData })
+    const result = await questionsCollection.updateOne(
+      { _id: new ObjectId(params.id) },
+      { $set: updateData }
+    )
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: "Question not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ message: "Question updated successfully" })
+    return NextResponse.json({
+      message: "Question updated successfully",
+    })
   } catch (error) {
     console.error("Error updating question:", error)
+    if (error instanceof Error && error.message.includes("token")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Failed to update question" }, { status: 500 })
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const { id } = params
-    const body = await request.json()
+    // Verify admin authentication
+    requireAdminAuth(request)
 
-    if (!ObjectId.isValid(id)) {
+    // Validate ObjectId
+    if (!ObjectId.isValid(params.id)) {
       return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
     }
 
     const db = await getDatabase()
     const questionsCollection = db.collection<Question>("questions")
 
-    const updateData = {
-      ...body,
-      updatedAt: new Date(),
-    }
-
-    const result = await questionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: updateData })
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ error: "Question not found" }, { status: 404 })
-    }
-
-    return NextResponse.json({ message: "Question updated successfully" })
-  } catch (error) {
-    console.error("Error updating question:", error)
-    return NextResponse.json({ error: "Failed to update question" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params
-
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: "Invalid question ID" }, { status: 400 })
-    }
-
-    const db = await getDatabase()
-    const questionsCollection = db.collection<Question>("questions")
-
-    const result = await questionsCollection.deleteOne({ _id: new ObjectId(id) })
+    const result = await questionsCollection.deleteOne({ _id: new ObjectId(params.id) })
 
     if (result.deletedCount === 0) {
       return NextResponse.json({ error: "Question not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ message: "Question deleted successfully" })
+    return NextResponse.json({
+      message: "Question deleted successfully",
+    })
   } catch (error) {
     console.error("Error deleting question:", error)
+    if (error instanceof Error && error.message.includes("token")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.json({ error: "Failed to delete question" }, { status: 500 })
   }
 }
