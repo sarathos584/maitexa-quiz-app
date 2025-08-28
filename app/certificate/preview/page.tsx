@@ -68,12 +68,42 @@ export default function CertificatePreviewById() {
 
   const copyUrl = async () => {
     const url = typeof window !== "undefined" ? window.location.href : ""
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+        return
+      } catch (e) {
+        console.error("Modern clipboard API failed:", e)
+      }
+    }
+    
+    // Fallback: create temporary textarea element
     try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      const textArea = document.createElement("textarea")
+      textArea.value = url
+      textArea.style.position = "fixed"
+      textArea.style.left = "-999999px"
+      textArea.style.top = "-999999px"
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      
+      const successful = document.execCommand("copy")
+      document.body.removeChild(textArea)
+      
+      if (successful) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      } else {
+        alert("Failed to copy URL. Please copy manually: " + url)
+      }
     } catch (e) {
-      console.error("Failed to copy URL", e)
+      console.error("Fallback copy failed:", e)
+      alert("Failed to copy URL. Please copy manually: " + url)
     }
   }
 

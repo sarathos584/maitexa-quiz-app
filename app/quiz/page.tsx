@@ -104,12 +104,10 @@ export default function QuizPage() {
   const handleSkip = () => {
     // move forward without selecting an answer
     const nextIndex = currentQuestionIndex + 1
-    if (nextIndex < questions.length) {
-      setCurrentQuestionIndex(nextIndex)
-      setSelectedAnswer(null)
-    } else {
-      submitQuiz(false)
-    }
+    if (questions.length === 0) return
+    const targetIndex = nextIndex < questions.length ? nextIndex : 0
+    setCurrentQuestionIndex(targetIndex)
+    setSelectedAnswer(null)
   }
 
   const handleNext = () => {
@@ -120,12 +118,14 @@ export default function QuizPage() {
         [currentQuestion._id]: selectedAnswer,
       }))
 
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex((prev) => prev + 1)
-        setSelectedAnswer(null)
-      } else {
-        // Quiz completed, submit answers
+      const isLast = currentQuestionIndex >= questions.length - 1
+      if (isLast) {
+        // Submit quiz on last question
         submitQuiz(false)
+      } else {
+        // Move to next question
+        setCurrentQuestionIndex(currentQuestionIndex + 1)
+        setSelectedAnswer(null)
       }
     }
   }
@@ -141,18 +141,21 @@ export default function QuizPage() {
         ...(selectedAnswer !== null && { [questions[currentQuestionIndex]?._id]: selectedAnswer }),
       }
 
-      // Calculate mock score
+      // Calculate score
       let correctCount = 0
-      const mockAnswers = Object.entries(finalAnswers).map(([questionId, selectedAnswer]) => {
+      const quizAnswers = Object.entries(finalAnswers).map(([questionId, selectedAnswer]) => {
         const question = questions.find((q) => q._id === questionId)
-        const isCorrect = question ? question.correctAnswer === selectedAnswer : false
+        // Ensure both values are numbers for comparison
+        const correctAnswerNum = Number(question?.correctAnswer || 0)
+        const selectedAnswerNum = Number(selectedAnswer || 0)
+        const isCorrect = question ? correctAnswerNum === selectedAnswerNum : false
         if (isCorrect) correctCount++
 
         return {
           questionId,
-          selectedAnswer,
+          selectedAnswer: selectedAnswerNum,
           isCorrect,
-          correctAnswer: question?.correctAnswer || 0,
+          correctAnswer: correctAnswerNum,
           question: question?.question || "",
           options: question?.options || [],
         }
@@ -160,34 +163,51 @@ export default function QuizPage() {
 
       const score = Math.round((correctCount / questions.length) * 100)
       const isExcellent = score >= 90
-
       const certId = generateCertificateId(new Date())
 
-      // Create mock submission data
-      const mockSubmission = {
-        _id: `mock_${Date.now()}`,
+      // Prepare submission data
+      const submissionData = {
         userId,
         userName: sessionStorage.getItem("userName") || "Test User",
         userEmail: sessionStorage.getItem("userEmail") || "test@example.com",
         score,
+        percentage: score,
         totalQuestions: questions.length,
         correctAnswers: correctCount,
-        answers: mockAnswers,
-        submittedAt: new Date().toISOString(),
+        answers: quizAnswers,
+        submittedAt: new Date(),
+        completedAt: new Date(),
         isExcellent,
         autoSubmitted: auto,
         timeTakenMs: deadline ? QUIZ_DURATION_MS - Math.max(0, deadline - Date.now()) : undefined,
         certificateId: certId,
+        certificateGenerated: isExcellent,
       }
 
-      // Store mock results in sessionStorage for the results page
-      sessionStorage.setItem("mockResults", JSON.stringify(mockSubmission))
-      sessionStorage.setItem("submissionId", mockSubmission._id)
+      // Submit to database
+      const response = await fetch("/api/submit-quiz", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(submissionData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to submit quiz")
+      }
+
+      const result = await response.json()
+
+      // Store results in sessionStorage for the results page
+      sessionStorage.setItem("mockResults", JSON.stringify(submissionData))
+      sessionStorage.setItem("submissionId", result.submissionId || `submission_${Date.now()}`)
+      sessionStorage.setItem("certificateId", certId)
 
       // Redirect to results page
       router.push("/results")
     } catch (error) {
-      console.error("Error creating mock results:", error)
+      console.error("Error submitting quiz:", error)
       alert("Something went wrong. Please try again.")
     } finally {
       setIsSubmitting(false)
@@ -230,6 +250,21 @@ export default function QuizPage() {
     )
   }
 
+  if (questions.length < 3) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <p className="mb-4">Not enough questions available for the assessment. Please try again later.</p>
+            <Link href="/">
+              <Button>Back to Home</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // Pre-quiz instructions screen
   if (!hasStarted) {
     return (
@@ -242,6 +277,7 @@ export default function QuizPage() {
           <CardContent className="space-y-4">
             <ul className="list-disc pl-6 space-y-2 text-sm text-muted-foreground">
               <li>You have 10 minutes to complete the assessment.</li>
+              <li>This assessment contains {questions.length} randomly selected questions.</li>
               <li>You can skip questions and come back if time permits.</li>
               <li>Your quiz auto-submits when time runs out.</li>
               <li>Click "Start Assessment" when you are ready.</li>
@@ -272,6 +308,14 @@ export default function QuizPage() {
             <div className="text-sm text-muted-foreground flex items-center gap-3">
               <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
               <span className="px-2 py-1 rounded bg-muted font-mono">{timeLeftDisplay}</span>
+              <Button 
+                onClick={() => submitQuiz(false)} 
+                disabled={isSubmitting}
+                size="sm"
+                className="ml-2"
+              >
+                {isSubmitting ? "Submitting..." : "Submit Quiz"}
+              </Button>
             </div>
           </div>
           <div className="mt-4">
@@ -298,20 +342,28 @@ export default function QuizPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <RadioGroup
-                value={selectedAnswer?.toString()}
+                value={selectedAnswer !== null ? selectedAnswer.toString() : undefined}
                 onValueChange={(value) => handleAnswerSelect(Number.parseInt(value))}
               >
-                {currentQuestion.options.map((option, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <RadioGroupItem value={index.toString()} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
-                      {option}
-                    </Label>
-                  </div>
-                ))}
+                {currentQuestion.options.map((option, index) => {
+                  const isSelected = selectedAnswer === index
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => handleAnswerSelect(index)}
+                      className={`flex items-center space-x-2 p-3 rounded-lg border transition-colors cursor-pointer ${
+                        isSelected ? "bg-muted border-primary" : "border-border"
+                      } hover:bg-muted/70`}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <RadioGroupItem value={index.toString()} id={`option-${index}`} />
+                      <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
+                        {option}
+                      </Label>
+                    </div>
+                  )
+                })}
               </RadioGroup>
 
               <div className="flex flex-wrap gap-2 justify-between items-center pt-4">
@@ -320,14 +372,8 @@ export default function QuizPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={handleSkip} disabled={isSubmitting}>Skip</Button>
-                  <Button variant="outline" onClick={() => submitQuiz(false)} disabled={isSubmitting}>Submit Now</Button>
-                  <Button variant="outline" onClick={exitWithoutSubmitting} disabled={isSubmitting}>Exit</Button>
                   <Button onClick={handleNext} disabled={selectedAnswer === null || isSubmitting}>
-                    {isSubmitting
-                      ? "Submitting..."
-                      : currentQuestionIndex === questions.length - 1
-                        ? "Submit Quiz"
-                        : "Next Question"}
+                    {currentQuestionIndex === questions.length - 1 ? "Submit Quiz" : "Next Question"}
                   </Button>
                 </div>
               </div>

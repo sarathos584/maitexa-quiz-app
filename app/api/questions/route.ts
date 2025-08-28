@@ -6,15 +6,17 @@ export async function GET() {
   try {
     const questionsCollection = await getCollection<Question>("questions")
 
-    // Fetch active questions, limit to 10 for the quiz
-    const docs = await questionsCollection
+    // Fetch all active questions
+    const allQuestions = await questionsCollection
       .find({ isActive: true })
-      .sort({ createdAt: -1 })
-      .limit(10)
       .toArray()
 
+    // Randomly select up to 10 questions
+    const shuffled = allQuestions.sort(() => Math.random() - 0.5)
+    const selectedQuestions = shuffled.slice(0, Math.min(10, allQuestions.length))
+
     // Remove correct answers from the response for security
-    const questions = docs.map(({ correctAnswer, ...rest }) => ({ ...rest, _id: rest._id!.toString() })) as any
+    const questions = selectedQuestions.map(({ correctAnswer, ...rest }) => ({ ...rest, _id: rest._id!.toString() })) as any
 
     return NextResponse.json({
       questions,
